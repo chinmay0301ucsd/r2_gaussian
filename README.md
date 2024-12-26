@@ -376,7 +376,11 @@ If you want to test your own data, please first convert it to our format (`meta_
 ## Running with slang-tomography-rasterizer
 Install wandb, and login. (See instructions on their website)
 From the root repository folder, install the slang-tomography-rasterizer as 
+
+
 > pip3 install r2_gaussian/slang_gaussian_tomography
+
+
 Go to `scripts_bash` folder, it has example scripts on how to run. 
 Use the `train_ours.py` script for both running the baseline (r2gauss) and ours. Use the `--render_backend` flag to specify `r2` or `slang` to run the baseline or our code respectively. 
 
