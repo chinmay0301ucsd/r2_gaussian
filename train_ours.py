@@ -23,7 +23,7 @@ import wandb
 
 sys.path.append("./")
 from r2_gaussian.arguments import ModelParams, OptimizationParams, PipelineParams
-from r2_gaussian.gaussian import GaussianModel, render, query, initialize_gaussian
+from r2_gaussian.gaussian import query, initialize_gaussian
 from r2_gaussian.utils.general_utils import safe_state
 from r2_gaussian.utils.cfg_utils import load_config
 from r2_gaussian.utils.log_utils import prepare_output_and_logger
@@ -31,6 +31,8 @@ from r2_gaussian.dataset import Scene
 from r2_gaussian.utils.loss_utils import l1_loss, ssim, tv_3d_loss
 from r2_gaussian.utils.image_utils import metric_vol, metric_proj
 from r2_gaussian.utils.plot_utils import show_two_slice
+from r2_gaussian.gaussian.gaussian_model_volr import GaussianModelVolr
+from slang_gaussian_tomography.api.inria_3dgs_tomo import render as render_slang
 
 
 def training(
@@ -47,6 +49,7 @@ def training(
     first_iter = 0
 
     # Set up dataset
+    max_num_reached = False
     scene = Scene(dataset, shuffle=False)
 
     # Set up some parameters
@@ -71,8 +74,9 @@ def training(
     )
 
     # Set up Gaussians
+
     gaussians = GaussianModel(scale_bound)
-    initialize_gaussian(gaussians, dataset, None)
+    initialize_gaussian(gaussians, dataset, None, args.subsample_ratio)
     scene.gaussians = gaussians
     gaussians.training_setup(opt)
     if checkpoint is not None:
@@ -102,10 +106,10 @@ def training(
 
         # Update learning rate
         gaussians.update_learning_rate(iteration)
-
+        max_num_reached = gaussians.get_density.shape[0] >= opt.max_num_gaussians
         # Get one camera for training
         if not viewpoint_stack:
-            viewpoint_stack = scene.getTrainCameras().copy()
+            viewpoint_stack = scene.getTrainCameras()[:args.num_train_cams].copy()
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack) - 1))
 
         # Render X-ray projection
@@ -116,13 +120,24 @@ def training(
             render_pkg["visibility_filter"],
             render_pkg["radii"],
         )
-
+        if args.render_backend == "slang":
+            viewspace_point_tensor = gaussians.get_xyz
         # Compute loss
         gt_image = viewpoint_cam.original_image.cuda()
         loss = {"total": 0.0}
         render_loss = l1_loss(image, gt_image)
         loss["render"] = render_loss
-        loss["total"] += loss["render"]
+        loss["total"] += loss["render"]    
+        # Save rendered image periodically
+
+        image_save_path = osp.join("images")
+        os.makedirs(image_save_path, exist_ok=True)
+        
+        # Save image using torchvision
+        # import torchvision
+        # torchvision.utils.save_image(image, osp.join(image_save_path, f"iter_{iteration:06d}_{args.render_backend}.png"), normalize=True)
+
+        # breakpoint()
         if opt.lambda_dssim > 0:
             loss_dssim = 1.0 - ssim(image, gt_image)
             loss["dssim"] = loss_dssim
@@ -158,7 +173,7 @@ def training(
             if iteration < opt.densify_until_iter:
                 if (
                     iteration > opt.densify_from_iter
-                    and iteration % opt.densification_interval == 0
+                    and iteration % opt.densification_interval == 0 and not max_num_reached
                 ):
                     gaussians.densify_and_prune(
                         opt.densify_grad_threshold,
@@ -248,7 +263,21 @@ def training_report_wandb(
         "train/total_points": scene.gaussians.get_xyz.shape[0]
     })
     wandb.log(metrics, step=iteration)
-
+    if iteration % 500 == 0:
+        # Render and log image to wandb
+        viewpoint = scene.getTestCameras()[0]
+        image = renderFunc(
+            viewpoint,
+            scene.gaussians,
+        )["render"]
+        gt_image = viewpoint.original_image.to("cuda")
+        error_map = torch.abs(image - gt_image)
+        
+        wandb.log({
+            "debug/test0_img": wandb.Image(image),
+            "debug/test0_gt": wandb.Image(gt_image),
+            "debug/test0_error": wandb.Image(error_map)
+        }, step=iteration)
     if iteration in testing_iterations:
         # Evaluate 2D rendering performance
         eval_save_path = osp.join(scene.model_path, "eval", f"iter_{iteration:06d}")
@@ -256,7 +285,7 @@ def training_report_wandb(
         torch.cuda.empty_cache()
 
         validation_configs = [
-            {"name": "render_train", "cameras": scene.getTrainCameras()},
+            {"name": "render_train", "cameras": scene.getTrainCameras()[:args.num_train_cams]},
             {"name": "render_test", "cameras": scene.getTestCameras()},
         ]
         psnr_2d, ssim_2d = None, None
@@ -315,7 +344,7 @@ def training_report_wandb(
         # Evaluate 3D reconstruction performance
         vol_pred = queryFunc(scene.gaussians)["vol"]
         vol_gt = scene.vol_gt
-        psnr_3d, _ = metric_vol(vol_gt, vol_pred, "psnr")
+        psnr_3d, _ = metric_vol(vol_gt, vol_pred, "psnr", nonzero_only=False)
         ssim_3d, ssim_3d_axis = metric_vol(vol_gt, vol_pred, "ssim")
         eval_dict = {
             "psnr_3d": psnr_3d,
@@ -351,7 +380,7 @@ def training_report_wandb(
         wandb.log(metrics_3d, step=iteration)
 
         tqdm.write(
-            f"[ITER {iteration}] Evaluating: psnr3d {psnr_3d:.3f}, ssim3d {ssim_3d:.3f}, psnr2d {psnr_2d:.3f}, ssim2d {ssim_2d:.3f}"
+            f"[ITER {iteration}] Evaluating: psnr3d {psnr_3d:.3f}, ssim3d {ssim_3d:.3f}, psnr2d {psnr_2d:.3f}, ssim2d {ssim_2d:.3f}, total_points {scene.gaussians.get_xyz.shape[0]}"
         )
 
     torch.cuda.empty_cache()
@@ -383,7 +412,7 @@ def training_report(
         torch.cuda.empty_cache()
 
         validation_configs = [
-            {"name": "render_train", "cameras": scene.getTrainCameras()},
+            {"name": "render_train", "cameras": scene.getTrainCameras()[:args.num_train_cams]},
             {"name": "render_test", "cameras": scene.getTestCameras()},
         ]
         psnr_2d, ssim_2d = None, None
@@ -518,6 +547,9 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str, default=None)
     parser.add_argument("--wandb", action="store_true", default=False)
     parser.add_argument("--render_backend", type=str, default="r2", help="r2, slang")
+    parser.add_argument("--subsample_ratio", type=int, default=1)
+    parser.add_argument("--max_pts", type=int, default=1e10)
+    parser.add_argument("--num_train_cams", type=int, default=-1)
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
     args.test_iterations.append(args.iterations)
@@ -536,13 +568,19 @@ if __name__ == "__main__":
             args_dict[key] = cfg[key]
 
     # Set up logging writer
+    project_name = "r2_gaussian_ours" if args.render_backend == "slang" else "r2_gaussian"
     if args.wandb: 
-        tb_writer = prepare_output_and_logger(args, logger_type="wandb", project_name="r2_gaussian")
+        tb_writer = prepare_output_and_logger(args, logger_type="wandb", project_name=project_name)
     else:
         tb_writer = prepare_output_and_logger(args, logger_type="tensorboard")
 
     print("Optimizing " + args.model_path)
-
+    
+    if args.render_backend == "slang":
+        from r2_gaussian.gaussian import GaussianModelVolr as GaussianModel, render_slang as render
+    else:
+        from r2_gaussian.gaussian import GaussianModel, render
+    
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
     training(
         lp.extract(args),

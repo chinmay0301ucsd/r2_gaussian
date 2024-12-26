@@ -21,7 +21,7 @@ from r2_gaussian.utils.argument_utils import ParamGroup
 class ModelParams(ParamGroup):
     def __init__(self, parser, sentinel=False):
         self._source_path = ""
-        self._model_path = ""
+        self._model_path = "output"
         self.data_device = "cuda"
         self.ply_path = ""  # Path to initialization point cloud (if None, we will try to find `init_*.npy`.)
         self.scale_min = 0.0005  # percent of volume size
@@ -39,6 +39,7 @@ class PipelineParams(ParamGroup):
     def __init__(self, parser):
         self.compute_cov3D_python = False
         self.debug = False
+        self.convert_SHs_python = False
         super().__init__(parser, "Pipeline Parameters")
 
 

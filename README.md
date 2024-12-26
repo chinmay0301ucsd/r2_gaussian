@@ -372,6 +372,14 @@ If you have (more than 100) X-ray projections but do not have ground volumes, fo
 
 If you want to test your own data, please first convert it to our format (`meta_data.json`) or SAX-NeRF (`*.pickle`) and generate initialization point clouds with `initialize_pcd.py`.
 
+
+## Running with slang-tomography-rasterizer
+Install wandb, and login. (See instructions on their website)
+From the root repository folder, install the slang-tomography-rasterizer as 
+> pip3 install r2_gaussian/slang_gaussian_tomography
+Go to `scripts_bash` folder, it has example scripts on how to run. 
+Use the `train_ours.py` script for both running the baseline (r2gauss) and ours. Use the `--render_backend` flag to specify `r2` or `slang` to run the baseline or our code respectively. 
+
 ## 5. Acknowledgement, license and citation
 
 Our code is adapted from [Gaussian Splatting](https://github.com/graphdeco-inria/gaussian-splatting), [SAX-NeRF](https://github.com/caiyuanhao1998/SAX-NeRF), [NAF](https://github.com/Ruyi-Zha/naf_cbct) and [TIGRE toolbox](https://github.com/CERN/TIGRE.git). We thank the authors for their excellent works.

@@ -10,7 +10,7 @@ from r2_gaussian.utils.graphics_utils import fetchPly
 from r2_gaussian.utils.system_utils import searchForMaxIteration
 
 
-def initialize_gaussian(gaussians: GaussianModel, args: ModelParams, loaded_iter=None):
+def initialize_gaussian(gaussians: GaussianModel, args: ModelParams, loaded_iter=None, subsample_ratio=1):
     if loaded_iter:
         if loaded_iter == -1:
             loaded_iter = searchForMaxIteration(
@@ -49,8 +49,8 @@ def initialize_gaussian(gaussians: GaussianModel, args: ModelParams, loaded_iter
         ply_type = ply_path.split(".")[-1]
         if ply_type == "npy":
             point_cloud = np.load(ply_path)
-            xyz = point_cloud[:, :3]
-            density = point_cloud[:, 3:4]
+            xyz = point_cloud[::subsample_ratio, :3]
+            density = point_cloud[::subsample_ratio, 3:4]
         elif ply_type == ".ply":
             point_cloud = fetchPly(ply_path)
             xyz = np.asarray(point_cloud.points)

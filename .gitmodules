@@ -4,3 +4,6 @@
 [submodule "r2_gaussian/submodules/xray-gaussian-rasterization-voxelization/third_party/glm"]
 	path = r2_gaussian/submodules/xray-gaussian-rasterization-voxelization/third_party/glm
 	url = https://github.com/g-truc/glm.git
+[submodule "r2_gaussian/submodules/fused-ssim"]
+	path = r2_gaussian/submodules/fused-ssim
+	url = https://github.com/rahul-goel/fused-ssim.git

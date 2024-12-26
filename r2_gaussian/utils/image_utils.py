@@ -88,7 +88,7 @@ def psnr(img1, img2, mask=None, pixel_max=1.0):
 
 
 @torch.no_grad()
-def metric_vol(img1, img2, metric="psnr", pixel_max=1.0):
+def metric_vol(img1, img2, metric="psnr", pixel_max=1.0, nonzero_only=False):
     """Metrics for volume. img1 must be GT."""
     assert metric in ["psnr", "ssim"]
     if isinstance(img2, np.ndarray):
@@ -99,7 +99,17 @@ def metric_vol(img1, img2, metric="psnr", pixel_max=1.0):
     if metric == "psnr":
         if pixel_max is None:
             pixel_max = img1.max()
-        mse_out = torch.mean((img1 - img2) ** 2)
+        
+        # Create mask for non-empty regions (where img1 > 0)
+        mask = img1 > 0
+        
+        # Compute MSE only in non-empty regions
+        squared_diff = (img1 - img2) ** 2
+        if nonzero_only:
+            mse_out = torch.sum(squared_diff * mask) / (mask.sum() + 1e-8)  # Add small epsilon to avoid division by zero
+        else:
+            mse_out = torch.mean((img1 - img2) ** 2)
+
         psnr_out = 10 * torch.log10(pixel_max**2 / mse_out.float())
         return psnr_out.item(), None
     elif metric == "ssim":

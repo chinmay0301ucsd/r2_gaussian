@@ -22,6 +22,7 @@ import yaml
 import json
 import matplotlib.cm as cm
 from argparse import ArgumentParser, Namespace
+from r2_gaussian.gaussian import GaussianModel, render
 
 
 sys.path.append("./")
@@ -32,7 +33,7 @@ from r2_gaussian.arguments import (
     get_combined_args,
 )
 from r2_gaussian.dataset import Scene
-from r2_gaussian.gaussian import GaussianModel, render, query, initialize_gaussian
+from r2_gaussian.gaussian import query, initialize_gaussian
 from r2_gaussian.utils.general_utils import safe_state
 from r2_gaussian.utils.image_utils import metric_vol, metric_proj
 
@@ -224,7 +225,13 @@ if __name__ == "__main__":
     parser.add_argument("--skip_render_train", action="store_true", default=False)
     parser.add_argument("--skip_render_test", action="store_true", default=False)
     parser.add_argument("--skip_recon", action="store_true", default=False)
+    parser.add_argument("--render_backend", type=str, default="r2", help="r2, slang")
     args = get_combined_args(parser)
+
+    if args.render_backend == "slang":
+        from r2_gaussian.gaussian import GaussianModelVolr as GaussianModel, render_slang as render
+    else:
+        from r2_gaussian.gaussian import GaussianModel, render
 
     safe_state(args.quiet)
 
