@@ -1,15 +1,22 @@
 <!-- <p align="center"> <img src="assets/logo.png" width="250px"> </p> -->
 ## Vol3DGS rasterizer for Tomopgraphy
+Our approach enables a volumetrically consistent and more accurate forward model for X-ray tomography compared to existing 3DGS based methods, that incur approximations due to splatting. We match the performance of existing state of the art 3DGS based tomography methods, with 10% fewer parameters. Our method is plug and play -- we used the same hyperparameters as R2-Gaussian for the results, while only replacing their rasterier with ours. 
+
+
 This repo is built on top of the [R2-Gaussian repo](https://github.com/Ruyi-Zha/r2_gaussian). Please see the repo link for downloading datasets. For the conda environment setup, use the same environment setup as in the [Vol3DGS repo](https://github.com/chinmay0301ucsd/Vol3DGS).
 For this repository also we use the same conda environment setup as in the [Vol3DGS repo](https://github.com/chinmay0301ucsd/Vol3DGS).
+
+![alt text](assets/image.png)
 
 ## Installation
 
 ```
 # Download Code
+conda activate vol3dgs
 git clone https://github.com/chinmay0301ucsd/r2_gaussian --recursive
 cd r2_gaussian
 bash install.sh
+
 # Install TIGRE for data generation and initialization
 wget https://github.com/CERN/TIGRE/archive/refs/tags/v2.3.zip
 unzip v2.3.zip
